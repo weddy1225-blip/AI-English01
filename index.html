@@ -61,3 +61,228 @@
         .mic-btn {
             font-size: 20px; padding: 12px 30px; background-color: #e53935; color: white;
             border: none; border-radius: 50px; cursor: pointer; box-shadow: 0 4px #b71c1c;
+            transition: 0.3s;
+        }
+        .mic-btn.listening { background-color: #212121; animation: pulse 1.5s infinite; }
+        
+        .feedback { margin-top: 15px; font-size: 18px; font-weight: bold; height: 25px; }
+
+        /* 大結局區 */
+        .ending-area { display: none; margin-top: 20px; padding: 25px; background-color: #e8f5e9; border: 3px dashed #4caf50; border-radius: 15px; }
+        .ending-en { font-size: 24px; color: #2e7d32; font-weight: bold; margin-bottom: 15px; line-height: 1.4; }
+        .ending-zh { font-size: 18px; color: #555; line-height: 1.4; }
+        
+        #start-screen { margin-bottom: 20px; }
+        .start-btn { font-size: 24px; padding: 15px 40px; background-color: #4caf50; color: white; border: none; border-radius: 50px; cursor: pointer; box-shadow: 0 4px #2e7d32; }
+
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+    <div class="game-board">
+        <h1>🍳 瘋狂早餐大冒險</h1>
+        
+        <div id="start-screen">
+            <p>這是一個 AI 互動遊戲，幫你練習英文口說！</p>
+            <button class="start-btn" onclick="startGame()">▶️ 開始遊戲</button>
+            <p style="color: #666; margin-top:15px; font-size: 14px;">※ 請使用 Chrome 瀏覽器並允許麥克風權限</p>
+        </div>
+
+        <div id="game-content" style="display: none;">
+            <div class="dialogue-box">
+                <div id="mom-en">What do you want to eat?</div>
+                <div class="dialogue-zh" id="mom-zh">你想吃什麼？</div>
+            </div>
+
+            <div class="options-container" id="options-container"></div>
+
+            <div class="mission-area" id="mission-area">
+                <div style="font-size: 16px; color: #555; margin-bottom: 10px;">請跟著大聲唸：</div>
+                <div class="target-text" id="target-text">...</div>
+                <button class="mic-btn" id="mic-btn" onclick="toggleListening()">🎤 點擊說話</button>
+                <div class="feedback" id="feedback-msg"></div>
+            </div>
+
+            <div class="ending-area" id="ending-area">
+                <div class="ending-en" id="ending-en">⏳ 魔法老師正在構思結局...</div>
+                <div class="ending-zh" id="ending-zh"></div>
+                <button class="start-btn" style="margin-top:20px; font-size: 18px;" onclick="location.reload()">🔄 再玩一次</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * ⚠️ 重要：部署說明
+         * 1. 請將下方的 URL 替換為你自己部署的 Google Apps Script Web App URL
+         * 2. 確保你的 GAS 腳本已設定為「所有人 (Anyone)」均可存取
+         */
+        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzhbxLE7iYjZ8iXs--ntnqqcQGOPQmP7FGKmHz_-tIPd6_k2j337S-gSC8bQea8PcfuDA/exec"; 
+
+        let currentLevel = 1; 
+        let chosenFood = "";
+        let chosenDrink = "";
+        let currentTargetSentence = "";
+        
+        const startScreen = document.getElementById('start-screen');
+        const gameContent = document.getElementById('game-content');
+        const momEn = document.getElementById('mom-en');
+        const momZh = document.getElementById('mom-zh');
+        const optionsContainer = document.getElementById('options-container');
+        const missionArea = document.getElementById('mission-area');
+        const targetTextElement = document.getElementById('target-text');
+        const micBtn = document.getElementById('mic-btn');
+        const feedbackMsg = document.getElementById('feedback-msg');
+        const endingArea = document.getElementById('ending-area');
+
+        // Web Speech API 初始化
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = SpeechRecognition ? new SpeechRecognition() : null;
+        if (recognition) {
+            recognition.lang = 'en-US';
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
+        }
+
+        function startGame() {
+            startScreen.style.display = "none";
+            gameContent.style.display = "block";
+            loadLevel1();
+        }
+
+        function loadLevel1() {
+            currentLevel = 1;
+            missionArea.style.display = "none";
+            const questionEn = "What do you want to eat?";
+            momEn.textContent = questionEn;
+            momZh.textContent = "你想吃什麼？";
+            speakEnglish(questionEn); 
+
+            optionsContainer.innerHTML = `
+                <button class="option-btn" onclick="selectOption('hamburger', 'I want a hamburger.')">🍔 漢堡</button>
+                <button class="option-btn" onclick="selectOption('sandwich', 'I want a sandwich.')">🥪 三明治</button>
+            `;
+        }
+
+        function loadLevel2() {
+            currentLevel = 2;
+            missionArea.style.display = "none";
+            optionsContainer.style.display = "flex";
+            feedbackMsg.textContent = "";
+            const questionEn = "What do you want to drink?";
+            momEn.textContent = questionEn;
+            momZh.textContent = "你想喝什麼？";
+            speakEnglish(questionEn); 
+
+            optionsContainer.innerHTML = `
+                <button class="option-btn" onclick="selectOption('milk', 'I want some milk.')">🥛 牛奶</button>
+                <button class="option-btn" onclick="selectOption('juice', 'I want some juice.')">🧃 果汁</button>
+            `;
+        }
+
+        function selectOption(itemValue, sentence) {
+            if (currentLevel === 1) chosenFood = itemValue;
+            if (currentLevel === 2) chosenDrink = itemValue;
+
+            currentTargetSentence = sentence;
+            targetTextElement.textContent = sentence;
+            missionArea.style.display = "block";
+            feedbackMsg.textContent = "";
+            const btns = optionsContainer.querySelectorAll('.option-btn');
+            btns.forEach(btn => btn.disabled = true);
+        }
+
+        function speakEnglish(text) {
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'en-US';
+                utterance.rate = 0.8; 
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        function toggleListening() {
+            if (!recognition) {
+                alert("抱歉，您的瀏覽器不支援語音辨識。請使用 Google Chrome。");
+                return;
+            }
+            try {
+                recognition.start();
+                micBtn.textContent = "👂 聆聽中...";
+                micBtn.classList.add('listening');
+            } catch (e) {
+                console.log("辨識已在進行中");
+            }
+        }
+
+        if (recognition) {
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript.toLowerCase().trim();
+                const targetText = currentTargetSentence.toLowerCase().replace(/[.,!?]/g, '').trim();
+                const cleanTranscript = transcript.replace(/[.,!?]/g, '').trim();
+
+                console.log("用戶說了:", cleanTranscript);
+
+                if (cleanTranscript.includes(targetText) || cleanTranscript === targetText) {
+                    feedbackMsg.style.color = "#2e7d32";
+                    feedbackMsg.textContent = "✅ 太棒了！發音很標準！";
+                    
+                    setTimeout(() => {
+                        if (currentLevel === 1) {
+                            loadLevel2();
+                        } else {
+                            fetchEnding();
+                        }
+                    }, 1500);
+                } else {
+                    feedbackMsg.style.color = "#c2185b";
+                    feedbackMsg.textContent = `🤔 聽到的是 "${transcript}"，再試一次！`;
+                }
+            };
+
+            recognition.onspeechend = () => {
+                recognition.stop();
+                resetMicBtn();
+            };
+            
+            recognition.onerror = () => {
+                feedbackMsg.style.color = "red";
+                feedbackMsg.textContent = "發生錯誤，請檢查麥克風設定。";
+                resetMicBtn();
+            };
+        }
+
+        function resetMicBtn() {
+            micBtn.textContent = "🎤 點擊說話";
+            micBtn.classList.remove('listening');
+        }
+
+        async function fetchEnding() {
+            document.querySelector('.dialogue-box').style.display = "none";
+            optionsContainer.style.display = "none";
+            missionArea.style.display = "none";
+            endingArea.style.display = "block";
+            
+            const endingEn = document.getElementById('ending-en');
+            const endingZh = document.getElementById('ending-zh');
+
+            try {
+                const response = await fetch(`${GAS_WEB_APP_URL}?food=${chosenFood}&drink=${chosenDrink}`);
+                const data = await response.json();
+                
+                endingEn.textContent = data.english;
+                endingZh.textContent = data.chinese;
+                speakEnglish(data.english);
+            } catch (error) {
+                console.error("Fetch Error:", error);
+                const fallbackText = `You eat the ${chosenFood} and drink the ${chosenDrink}. It is very yummy!`;
+                endingEn.textContent = fallbackText;
+                endingZh.textContent = `你吃了${chosenFood}並喝了${chosenDrink}。真好吃！(連線異常)`;
+                speakEnglish(fallbackText);
+            }
+        }
+    </script>
+</body>
+</html>
